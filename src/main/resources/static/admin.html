@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - User Management</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .admin-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .user-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .user-table th,
+        .user-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        .user-table th {
+            background-color: #2c3e50;
+            color: white;
+        }
+
+        .user-table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .role-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .role-student {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .role-teacher {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .role-admin {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .btn-to-teacher {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-to-student {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+<div class="admin-container">
+    <h1>👑 Admin - User Management</h1>
+
+    <div id="userList">
+        <div class="loading">Loading users...</div>
+    </div>
+
+    <a href="/index.html" class="back-link">← Back to Course Catalog</a>
+</div>
+
+<script>
+    const API_BASE = 'http://localhost:8080';
+
+    // 检查登录状态和权限
+    async function checkAdminAccess() {
+        try {
+            const response = await fetch('/auth/current-user', {
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                const user = await response.json();
+                if (user.role === 'ROLE_ADMIN') {
+                    loadUsers();
+                } else {
+                    document.getElementById('userList').innerHTML =
+                        '<div class="loading" style="color: red;">Access Denied. Admin only.</div>';
+                }
+            } else {
+                window.location.href = '/index.html';
+            }
+        } catch (error) {
+            console.error('Check admin access error:', error);
+            window.location.href = '/index.html';
+        }
+    }
+
+    // 加载用户列表
+    async function loadUsers() {
+        try {
+            const response = await fetch('/admin/users', {
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                const users = await response.json();
+                renderUserTable(users);
+            } else {
+                document.getElementById('userList').innerHTML =
+                    '<div class="loading">Failed to load users</div>';
+            }
+        } catch (error) {
+            console.error('Load users error:', error);
+            document.getElementById('userList').innerHTML =
+                '<div class="loading">Failed to load users</div>';
+        }
+    }
+
+    // 渲染用户表格
+    function renderUserTable(users) {
+        if (!users || users.length === 0) {
+            document.getElementById('userList').innerHTML =
+                '<div class="loading">No users found</div>';
+            return;
+        }
+
+        let html = `
+                <table class="user-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Registered</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+        for (const user of users) {
+            let roleClass = '';
+            let roleText = '';
+
+            if (user.role === 'ROLE_STUDENT') {
+                roleClass = 'role-student';
+                roleText = 'Student';
+            } else if (user.role === 'ROLE_TEACHER') {
+                roleClass = 'role-teacher';
+                roleText = 'Teacher';
+            } else if (user.role === 'ROLE_ADMIN') {
+                roleClass = 'role-admin';
+                roleText = 'Admin';
+            }
+
+            let actionButton = '';
+            if (user.role === 'ROLE_STUDENT') {
+                actionButton = `<button class="btn-to-teacher" onclick="changeRole(${user.userId}, 'to-teacher')">转为教师</button>`;
+            } else if (user.role === 'ROLE_TEACHER') {
+                actionButton = `<button class="btn-to-student" onclick="changeRole(${user.userId}, 'to-student')">转为学生</button>`;
+            } else {
+                actionButton = `<button class="btn-disabled" disabled>Admin</button>`;
+            }
+
+            html += `
+                    <tr>
+                        <td>${user.userId}</td>
+                        <td>${escapeHtml(user.username)}</td>
+                        <td>${escapeHtml(user.email)}</td>
+                        <td><span class="role-badge ${roleClass}">${roleText}</span></td>
+                        <td>${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</td>
+                        <td>${actionButton}</td>
+                    </tr>
+                `;
+        }
+
+        html += `
+                    </tbody>
+                </table>
+            `;
+
+        document.getElementById('userList').innerHTML = html;
+    }
+
+    // 修改用户角色
+    async function changeRole(userId, action) {
+        try {
+            const response = await fetch(`/admin/users/${userId}/${action}`, {
+                method: 'PUT',
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                alert(data.message);
+                loadUsers();  // 刷新列表
+            } else {
+                const error = await response.json();
+                alert(error.error || 'Failed to change role');
+            }
+        } catch (error) {
+            console.error('Change role error:', error);
+            alert('Failed to change role');
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // 页面加载时检查权限
+    checkAdminAccess();
+</script>
+</body>
+</html>
